@@ -1086,15 +1086,17 @@ bool connectService()
     http.addHeader("CoolHomeAccount", myconf.cloudlogin);
     DynamicJsonDocument request(2048);
     String json;
+    
     request["version"] = SW_VERSION;
     request["platform"] = SW_PLATFORM;
 
     myconf.mode = myconf.mode & ~(1 << MODE_AUTO);
-
+    
 
     request["sensorid"] = ESP.getChipId();
     request["heater"] = toaster;
     JsonArray sensors = request.createNestedArray("sensors");
+    
     if (!isnan(dallas_temp) && dallas_ok && is_sensor(SID_DALLAS))
     {
       JsonObject dallas = sensors.createNestedObject();
@@ -1102,6 +1104,7 @@ bool connectService()
       dallas["name"] = "Integrated dallas";
       dallas["value"] = dallas_temp;
     }
+    
     if (!isnan(dht_temp) && dht_ok && is_sensor(DHT11))
     {
       JsonObject dhtemp = sensors.createNestedObject();
@@ -1110,6 +1113,7 @@ bool connectService()
       dhtemp["value"] = dht_temp;
       Serial.println("add dhtemp to sensors");
     }
+    
     if (!isnan(dht_hum) && dht_ok && is_sensor(DHT11))
     {
       Serial.println("Add humidity");
@@ -1119,6 +1123,7 @@ bool connectService()
       dhthum["value"] = dht_hum;
 
     }
+    
     if (watering_duration)
     {
       JsonObject dhthum = sensors.createNestedObject();
@@ -1127,27 +1132,35 @@ bool connectService()
       dhthum["value"] = watering_duration;
       watering_duration = 0;
     }
+    
     serializeJson(request, json);
     lastHttpRequest = json;
     Serial.println(json);
+    
     int httpCode = http.POST(json);
+    
     if (httpCode == HTTP_CODE_OK)
     {
+      
       DynamicJsonDocument resp(2048);
       lastHttpResponse = http.getString();
       Serial.println(lastHttpResponse);
 
       deserializeJson(resp, lastHttpResponse);
+      
       http.end();
       JsonVariant con = resp["connected"];
+      
       Serial.print("connected : ");
       Serial.println(con.as<bool>());
-      JsonVariant dt = resp["datetime"];
+      
+      JsonVariant jdt = resp["date_time"];
       Serial.print("datetime : ");
-      Serial.println(dt.as<char*>());
-
-      // XP !!! bool heat_cons = resp["heater"];
-      bool heat_cons = false;
+      Serial.println(jdt.as<String>());
+      
+      // XP !!! bool heat_cons = ;
+      bool heat_cons = resp["heater"];
+      
       
       if (is_mode(MODE_WATERING))
       {
@@ -1156,12 +1169,14 @@ bool connectService()
         setToaster(heat_cons);
       
       httpConsigne = heat_cons;
-      /*if (resp["heater"])
+      
+      if (resp["heater"])
         {
         setToaster(resp["heater"]);
         httpConsigne = resp["heater"];
         } else httpConsigne = -1;
-      */
+      
+     
       if (resp["version"])
       {
         if (resp["version"] > SW_VERSION)
@@ -1174,6 +1189,7 @@ bool connectService()
           }
         }
       }
+      
       return true;
     }
   }
