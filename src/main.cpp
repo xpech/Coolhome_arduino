@@ -14,6 +14,7 @@
 #include <Arduino.h>
 
 #define SW_VERSION 21
+#define SW_VERSION 22
 #if defined(ESP8266)
 #define SW_PLATFORM "ESP8266"
 #include <ESP8266WiFi.h>
@@ -508,8 +509,9 @@ String htmlNav()
          "<li class=\"nav-item\"><a class=\"nav-link\" href=\"/update\">Mise à jour</a></li>"
          "<li class=\"nav-item\"><a class=\"nav-link\" href=\"/json\">JSON</a></li>"
          "</ul></div><ul class=\"navbar-nav flex-row ml-md-auto d-none d-md-flex\">"
-         "<li class=\"nav-item nav-link\"> " + String(ESP.getChipId()) + "</li>"
-         "<li class=\"nav-item nav-link\">version " + String(SW_VERSION) + "</li>"
+         "<li class=\"nav-item nav-link\"><a href=\"https://coolhome.ovh\">CoolHome</a></li>"
+         "<li class=\"nav-item nav-link\">ESP #" + String(ESP.getChipId()) + "</li>"
+         "<li class=\"nav-item nav-link\">version " + String(SW_VERSION) + " (" + __DATE__ + ")</li>"
          "<li class=\"nav-item nav-link\">" + timezone.dateTime() + "</li></ul></nav>";
 }
 
