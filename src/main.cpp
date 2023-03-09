@@ -266,8 +266,23 @@ float getTarget()
 
 void IRAM_ATTR resetWifi()
 {
+  Serial.println("Ask reset");
   noInterrupts();
+  unsigned long start = millis();
+
+  while(true)
+  {
+    if (digitalRead(RESET_PIN) == LOW)
+    {
+      Serial.println("abort reset");
+      return;
+    }
+    if ((millis() - start) > 2000)
+      break;
+  }
+  Serial.println("Reseting");
   WiFi.disconnect();
+  WiFi.setAutoReconnect(false);
 
   Serial.println("Reset Setup");
   myconf.setup_ok = 0;
