@@ -262,7 +262,6 @@ float getTarget()
    RESET DU WIFI
 
 */
-
 void IRAM_ATTR resetWifi()
 {
   Serial.println("Ask reset");
@@ -430,16 +429,19 @@ void handleSetup()
     set_sensor(SID_DHT, (server.arg("dht11") == "1"));
     set_sensor(SID_DALLAS, (server.arg("dallas") == "1"));
     conf_save();
-    if (true) // || server.hasArg("ssid"))
+    if (server.hasArg("ssid") && (server.arg("ssid") != ""))
     {
+      Serial.print("Change SSID : ");
+
       
       WiFi.softAPdisconnect(true);
       String newssid = server.arg("ssid");
       String newpass = server.arg("pass");
+      Serial.println(newssid);
+  
       WiFi.persistent(true);
       WiFi.setAutoConnect(true);
-//      WiFi.begin(newssid, newpass);
-      WiFi.begin("lamouetterieuse2", "MARINE/XAV");
+      WiFi.begin(newssid, newpass);
       WiFi.waitForConnectResult();
       int k = 0;
       while ((WiFi.status() != WL_CONNECTED) && (k < 80)) {
@@ -448,16 +450,11 @@ void handleSetup()
         k++;
         if (k > 80)
         {
-          WiFi.disconnect();
+          resetWifi();
         }
       }
     }
   }
-  // delay(500);
-  // ESP.reset();
-
-
-  // F("<!DOCTYPE html>"
   html.concat(F("<form method=\"GET\" action=\"/setup\">"));
   html.concat(F("<input type=\"hidden\" name=\"securekey\" value=\""));
   html.concat(httpSecure);
@@ -465,7 +462,8 @@ void handleSetup()
 
   html.concat(cardBegin("Wifi"));
   html.concat(F("<div class=\"form-group\"><label>Wifi :</label>"
-                "<select class=\"form-control\" name=\"ssid\">"));
+                "<select class=\"form-control\" name=\"ssid\">"
+                "<option value=\"\">Choose...</option>"));
   int numSsid = WiFi.scanNetworks();
   for (int thisNet = 0; thisNet < numSsid; thisNet++) {
     html.concat("<option value=\"" + WiFi.SSID(thisNet) + "\">" + WiFi.SSID(thisNet) + "</option>");
@@ -941,6 +939,7 @@ String hostname;
 
 void connectWifi()
 {
+  
   /* gestion WIFI */
    if (myconf.setup_ok)
    {
@@ -948,7 +947,7 @@ void connectWifi()
       //WiFi.begin("lamouetterieuse2", "MARINE/XAV");
 
   
-      WiFi.begin(myconf.wifi_ssid, myconf.wifi_pass);
+      // WiFi.begin(myconf.wifi_ssid, myconf.wifi_pass);
       WiFi.begin();
 
       Serial.println(myconf.wifi_ssid);
@@ -973,7 +972,7 @@ void connectWifi()
        }
   } else {
     Serial.print("Not connected, try to reconnected later ...");
-     Serial.println("Starting Accesspoint mode ...");
+    Serial.println("Starting Accesspoint mode ...");
     WiFi.mode(WIFI_AP);
     WiFi.softAP(hostname);
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -984,6 +983,10 @@ void connectWifi()
 int HttpUpdatePeriod = 60 * 5;
 
 time_t lastHttpUpdate = 0;
+/*
+  Send data to coolhome server
+  If wifi is not connected, try to connect
+*/
 void http_update()
 {
   if ((timezone.now() - lastHttpUpdate) >= HttpUpdatePeriod)
@@ -991,10 +994,12 @@ void http_update()
     if (!connectService())
       Serial.println("error update server");
     lastHttpUpdate =  timezone.now();
-
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      if (myconf.setup_ok) connectWifi();
+    }
   } else {
     // Serial.println("not update server");
-   
   }
 }
 
@@ -1021,15 +1026,42 @@ void setup()
   stopToaster();
   Serial.print("SSID : ");
   Serial.println(myconf.wifi_ssid);
-  connectWifi();
-  /*if (WiFi.status() != WL_CONNECTED) {
+  
+  /* Manage Wifi */
+  //WiFi.setAutoConnect(true);
+  WiFi.begin();
+
+  int connect_attempts = 0;
+  while (WiFi.status() != WL_CONNECTED)
+      {
+        delay(700);
+        Serial.printf("Connection status: %s\n", wifisatus(WiFi.status()));
+        Serial.print(".");
+        connect_attempts++;
+        if (connect_attempts > 20) break;
+      }
+       Serial.println(" connected");
+       Serial.println(wifisatus(WiFi.status()));
+      if (WiFi.status() == WL_CONNECTED)
+       {
+          Serial.print("Connected, IP address: ");
+          Serial.println(WiFi.localIP());
+         // NTP
+        waitForSync(); // NTP
+        timezone.setLocation("Europe/Paris");
+       } else {
+       Serial.print("WTF with WIFI");
+     
+       }
+
+  if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Starting Accesspoint mode ...");
     WiFi.mode(WIFI_AP);
     WiFi.softAP(hostname);
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     Serial.println(WiFi.softAPIP());
-  }*/
+  }
   
   // Demarre le mDNS
   Serial.print("hostname:");
@@ -1069,6 +1101,7 @@ void setup()
   httpUpdater.setup(&server);
   // demarrage du server web
   server.begin();
+  Serial.println("started");
 
 
   // setEvent(http_update, uint8_t hr, uint8_t min, uint8_t sec,
@@ -1257,7 +1290,7 @@ void loop() {
   server.handleClient(); // on verifie si on a une connexion http et on la gère
   dnsServer.processNextRequest();
 
-  unsigned long current_h = timezone.hour();
+  // unsigned long current_h = timezone.hour();
 
 #ifdef POTAR_TEMP
   float v =  (float)analogRead(POTAR_PIN);
