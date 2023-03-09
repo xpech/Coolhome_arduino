@@ -13,7 +13,6 @@
 
 #include <Arduino.h>
 
-#define SW_VERSION 21
 #define SW_VERSION 22
 #if defined(ESP8266)
 #define SW_PLATFORM "ESP8266"
