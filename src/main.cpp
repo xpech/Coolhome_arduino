@@ -932,7 +932,7 @@ void setToaster(bool activ) {
   if (is_mode(MODE_PILOT)) activ = !activ;
   Serial.print( " -> ");
   Serial.println(activ);
-  digitalWrite(TOASTER_PIN, (activ ? HIGH : LOW));
+  digitalWrite(TOASTER_PIN, (activ ? LOW : HIGH));
 }
 String hostname;
 
