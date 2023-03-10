@@ -930,7 +930,7 @@ void setToaster(bool activ) {
   toaster = activ;
   Serial.print(toaster);
   if (is_mode(MODE_PILOT)) activ = !activ;
-  Serial.print( " : ");
+  Serial.print( " -> ");
   Serial.println(activ);
   digitalWrite(TOASTER_PIN, (activ ? HIGH : LOW));
 }
@@ -1211,20 +1211,16 @@ bool connectService()
       bool heat_cons = resp["heater"];
       
       
+      Serial.print("heat_cons : ");
+      Serial.println(heat_cons);
+
       if (is_mode(MODE_WATERING))
       {
         watering();
       } else 
         setToaster(heat_cons);
       
-      httpConsigne = heat_cons;
-      
-      if (resp["heater"])
-        {
-        setToaster(resp["heater"]);
-        httpConsigne = resp["heater"];
-        } else httpConsigne = -1;
-      
+      httpConsigne = 1;
      
       if (resp["version"])
       {
