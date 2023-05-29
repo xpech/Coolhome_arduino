@@ -13,7 +13,7 @@
 
 #include <Arduino.h>
 
-#define SW_VERSION 22
+#define SW_VERSION 26
 #if defined(ESP8266)
 #define SW_PLATFORM "ESP8266"
 #include <ESP8266WiFi.h>
@@ -61,6 +61,11 @@ DNSServer dnsServer;
 
 int  updateDatas();
 void watering();
+void watering(unsigned long duration);
+unsigned long watering_duration = 0;
+unsigned long start_watering_at = 0;
+boolean on_watering = false;
+
 
 
 #define USE_DHT // utilise un capteur dht11 - commenter pour desactiver
@@ -647,8 +652,17 @@ void handleHome()
   if (httpConsigne < 0)
     html.concat(F("<p class=\"alert alert-light\">Pas de consigne serveur</p>"));
   else if (httpConsigne == 0)
-    html.concat(F("<p class=\"alert alert-dark\">Coonsigne Off</p>"));
-  else html.concat(F("<p class=\"alert alert-warning\">Coonsigne On</p>"));
+    html.concat(F("<p class=\"alert alert-dark\">Consigne Off</p>"));
+  else html.concat(F("<p class=\"alert alert-warning\">Consigne On</p>"));
+
+  if (is_mode(MODE_WATERING))
+  {
+    html.concat(F("<p class=\"alert alert-info\">Arrosage durée : "));
+    html.concat(watering_duration);
+    html.concat(F(" départ : "));
+    html.concat(start_watering_at);
+    html.concat(F(" </p>"));
+  }
 
   html.concat(F("</div><div class=\"card-footer\">"));
   if (is_mode(MODE_AUTO))
@@ -657,6 +671,7 @@ void handleHome()
     html.concat(getTarget());
     html.concat(F("°)"));
   }
+  html.concat(F("<a href=\"/sync\" class=\"btn btn-primary mr-2\">Synchro Serveur</a>"));
   /*
     html.concat(F("<a href=\"/program\" class=\"btn btn-primary mr-2\">Programme</a>"));
     html.concat(F("<a href=\"/setup\" class=\"btn btn-light mr-2\"> Setup </a> "));
@@ -664,6 +679,7 @@ void handleHome()
   html.concat(F("</div></div>"));
   html.concat(strdebug);
   html.concat(htmlFoot());
+  // strdebug = "";
   server.send(200, "text/html", html.c_str());
 }
 
@@ -780,6 +796,17 @@ void handleProgram() {
 void handleOn() {
   /* switdh off */
   startToaster();
+  handleHome();
+}
+
+/*
+  handle http reponse /on
+  allume le radiateur et memorise (toaster = 1 )
+  renvoie le statut standard
+*/
+void handleSync() {
+  /* switdh off */
+  connectService();
   handleHome();
 }
 
@@ -916,7 +943,7 @@ void stopToaster() {
 unsigned long elapsed(unsigned long from)
 {
   unsigned long n = millis();
-  if (n > from) return n - from;
+  if (n >= from) return n - from;
   return n + (ULONG_MAX - from);
 }
 
@@ -924,14 +951,9 @@ unsigned long limited_duration = 10000;
 unsigned long limited_start = 0;
 unsigned long limited_session_id = 0;
 
-
 void setToaster(bool activ) {
-  Serial.print("set mode ");
   toaster = activ;
-  Serial.print(toaster);
   if (is_mode(MODE_PILOT)) activ = !activ;
-  Serial.print( " -> ");
-  Serial.println(activ);
   digitalWrite(TOASTER_PIN, (activ ? LOW : HIGH));
 }
 String hostname;
@@ -1001,6 +1023,11 @@ void http_update()
   } else {
     // Serial.println("not update server");
   }
+}
+
+void wifimanager()
+{
+
 }
 
 
@@ -1097,6 +1124,8 @@ void setup()
   server.on("/test", handleTest);
   server.on("/program", handleProgram);
 
+  server.on("/sync", handleSync);
+
   // mise a jour OTA
   httpUpdater.setup(&server);
   // demarrage du server web
@@ -1120,7 +1149,8 @@ unsigned long auto_timer_delay = 10000;
 
 String host = "http://coolhome.ovh/api";
 String updatehost = "coolhome.ovh";
-unsigned long watering_duration = 0;
+
+
 
 bool connectService()
 {
@@ -1173,13 +1203,12 @@ bool connectService()
 
     }
     
-    if (watering_duration)
+    if (on_watering)
     {
       JsonObject dhthum = sensors.createNestedObject();
       dhthum["kind"] = "water";
       dhthum["name"] = "Watering";
-      dhthum["value"] = watering_duration;
-      watering_duration = 0;
+      dhthum["value"] = 1;
     }
     
     serializeJson(request, json);
@@ -1210,13 +1239,13 @@ bool connectService()
       // XP !!! bool heat_cons = ;
       bool heat_cons = resp["heater"];
       
-      
       Serial.print("heat_cons : ");
       Serial.println(heat_cons);
 
       if (is_mode(MODE_WATERING))
       {
-        watering();
+        int duration = resp["duration"];
+        watering(duration * 60);
       } else 
         setToaster(heat_cons);
       
@@ -1241,35 +1270,51 @@ bool connectService()
   return false;
 }
 
-unsigned long start_watering_at = 0;
+unsigned long last_watering= 0;
+unsigned long last_watering_date = 0;
+
+
 
 void watering(unsigned long duration)
 {
-  Serial.print("Watering duration : ");
-  Serial.println(duration);
-  Serial.println(start_watering_at);
+
+  strdebug = "watering(";
+  strdebug += duration;
+  strdebug  += ") => ";
   if (duration > 0)
   {
+    last_watering = duration;
+    if (duration > 3600) duration = 3600; // 1h max
     duration *= 1000;
+    
     if (start_watering_at == 0) {
       start_watering_at = millis();
       watering_duration = duration / 1000;
     }
     if (elapsed(start_watering_at) > duration)
     {
-        Serial.println("Stop Watering (end)");
-        Serial.println(elapsed(start_watering_at));
-
+        if (on_watering)
+          Serial.println("Stop Watering (end)");
+        strdebug += "Stop Watering : time off / start: ";
+        strdebug += start_watering_at;
+        strdebug += "  elapsed : " ;
+        strdebug += elapsed(start_watering_at);
+        on_watering = false;
+        start_watering_at = 0;
         stopToaster();
     } else
     {
-        Serial.println("Start Watering");
+        if (!on_watering)
+          Serial.println("Start Watering");
         startToaster();
+        on_watering = true;
+        strdebug += "On watering";
      }
-  } else {
+  } else if(on_watering) {
     Serial.println("Not Watering");
+    strdebug += "Stop Watering : duration is null";
     stopToaster();
-    start_watering_at = 0;
+    start_watering_at += 0;
   }
 }
 void watering()
@@ -1279,7 +1324,8 @@ void watering()
 
 
 void loop() {
-  strdebug = "";
+
+  // strdebug = "";
 
 
   MDNS.update(); // mise à jour MDNS / necessaire !
@@ -1293,7 +1339,7 @@ void loop() {
   float target = 20. + 40. * v / 1023.;
 #endif
   http_update();
-  if (is_mode(MODE_WATERING)) watering();
+  if (is_mode(MODE_WATERING) && is_mode(MODE_AUTO)) watering();
   events();
   delay(100); // pause de 100ms : gain d'energie
 }
