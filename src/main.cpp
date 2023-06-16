@@ -1203,12 +1203,12 @@ bool connectService()
 
     }
     
-    if (on_watering)
+    if (is_mode(MODE_WATERING))
     {
       JsonObject dhthum = sensors.createNestedObject();
       dhthum["kind"] = "water";
       dhthum["name"] = "Watering";
-      dhthum["value"] = 1;
+      dhthum["value"] = (int)on_watering;
     }
     
     serializeJson(request, json);
@@ -1314,6 +1314,7 @@ void watering(unsigned long duration)
     Serial.println("Not Watering");
     strdebug += "Stop Watering : duration is null";
     stopToaster();
+    on_watering = false;
     start_watering_at += 0;
   }
 }
