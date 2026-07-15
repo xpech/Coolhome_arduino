@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Coolhome Lexicon Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared-ui.css">
+</head>
+<body class="lexicon-page">
+    <div class="top-panel lexicon">
+        <button id="topZone1" type="button" class="top-btn">Zone 1</button>
+        <button id="topZone2" type="button" class="top-btn">Zone 2</button>
+        <button id="topLexiconPowerOn" type="button" class="top-btn primary">Power On</button>
+        <button id="topLexiconPowerOff" type="button" class="top-btn warn">Power Off</button>
+        <button id="topLexiconVolUp" type="button" class="top-btn volume-control volume-up">Vol +</button>
+        <button id="topLexiconVolDown" type="button" class="top-btn volume-control volume-down">Vol -</button>
+        <button id="toAzurPage" type="button" class="top-btn nav">&rarr; Azur</button>
+    </div>
+
+    <main class="wrap">
+        <section class="hero">
+            <h1>Coolhome Lexicon</h1>
+            <p>Télécommande série optimisée mobile. Commandes rapides en haut, commandes avancées en bas.</p>
+        </section>
+
+        <section class="panel status">
+            <div class="row">
+                <h2>Statut liaison</h2>
+                <span id="statusBadge" class="badge">IDLE</span>
+            </div>
+            <div class="zone-picker" id="zonePicker">
+                <button type="button" data-zone="01" class="active">Zone 1</button>
+                <button type="button" data-zone="02">Zone 2</button>
+            </div>
+            <p class="muted" id="currentRoute">Route: /lexicon_rc5</p>
+            <div class="log" id="log"></div>
+        </section>
+
+        <section class="panel">
+            <div class="row">
+                <h2>Actions essentielles</h2>
+                <span class="muted">Contrôles tactiles</span>
+            </div>
+            <div class="grid" id="quickActions"></div>
+
+            <h2 class="section-title">Sources</h2>
+            <div class="chips" id="sourceActions"></div>
+
+            <h2 class="section-title">Navigation</h2>
+            <div class="dpad" id="navPad"></div>
+
+            <h2 class="section-title">Transport</h2>
+            <div class="grid cols-4" id="transportActions"></div>
+        </section>
+
+        <section class="panel">
+            <div class="row">
+                <h2>Commandes avancées</h2>
+                <span class="muted">RC5 + direct</span>
+            </div>
+
+            <details>
+                <summary>Modes son et affichage</summary>
+                <div class="grid cols-3" id="advancedAudio"></div>
+            </details>
+
+            <details>
+                <summary>Zone 2 presets</summary>
+                <div class="grid cols-3" id="zone2Actions"></div>
+            </details>
+
+            <details>
+                <summary>Commande RC5 manuelle</summary>
+                <div>
+                    <div class="form-grid">
+                        <input id="manualRc5C1" value="0x10" aria-label="Commande 1">
+                        <input id="manualRc5C2" value="0x10" aria-label="Commande 2">
+                        <button class="ghost-btn full" id="sendManualRc5" type="button">Envoyer RC5</button>
+                    </div>
+                </div>
+            </details>
+
+            <details>
+                <summary>Commande directe manuelle</summary>
+                <div>
+                    <div class="form-grid">
+                        <input id="manualCmd" value="0x1D" aria-label="Commande">
+                        <input id="manualData" value="" placeholder="data optionnelle" aria-label="Data">
+                        <button class="ghost-btn full" id="sendManualCmd" type="button">Envoyer commande directe</button>
+                    </div>
+                </div>
+            </details>
+        </section>
+    </main>
+
+    <p class="footer">Coolhome Lexicon • interface mobile first</p>
+
+    <script>
+        (function() {
+            const state = {
+                zone: "01"
+            };
+
+            const topZone1 = document.getElementById("topZone1");
+            const topZone2 = document.getElementById("topZone2");
+            const statusBadge = document.getElementById("statusBadge");
+            const currentRoute = document.getElementById("currentRoute");
+            const logEl = document.getElementById("log");
+
+            const quickActions = [
+                { label: "Standby", c1: "0x10", c2: "0x0C", cls: "warn" },
+                { label: "Power On", c1: "0x10", c2: "0x7B", cls: "primary" },
+                { label: "Power Off", c1: "0x10", c2: "0x7C", cls: "warn" },
+                { label: "Mute", c1: "0x10", c2: "0x0D" },
+                { label: "Vol +", c1: "0x10", c2: "0x10", cls: "primary" },
+                { label: "Vol -", c1: "0x10", c2: "0x11" }
+            ];
+
+            const sourceActions = [
+                { label: "DAB", c1: "0x10", c2: "0x48" },
+                { label: "Radio", c1: "0x10", c2: "0x5B" },
+                { label: "Net", c1: "0x10", c2: "0x5C" },
+                { label: "CD", c1: "0x10", c2: "0x76" },
+                { label: "STB", c1: "0x10", c2: "0x64" },
+                { label: "USB", c1: "0x10", c2: "0x5D" },
+                { label: "AV", c1: "0x10", c2: "0x5E" },
+                { label: "SAT", c1: "0x10", c2: "0x1B" },
+                { label: "BD", c1: "0x10", c2: "0x62" }
+            ];
+
+            const navActions = [
+                { blank: true },
+                { label: "Up", c1: "0x10", c2: "0x56" },
+                { blank: true },
+                { label: "Left", c1: "0x10", c2: "0x51" },
+                { label: "OK", c1: "0x10", c2: "0x57", cls: "primary" },
+                { label: "Right", c1: "0x10", c2: "0x50" },
+                { label: "Home", c1: "0x10", c2: "0x2B" },
+                { label: "Down", c1: "0x10", c2: "0x55" },
+                { label: "Menu", c1: "0x10", c2: "0x52" }
+            ];
+
+            const transportActions = [
+                { label: "Play", c1: "0x10", c2: "0x35" },
+                { label: "Pause", c1: "0x10", c2: "0x30" },
+                { label: "Stop", c1: "0x10", c2: "0x36" },
+                { label: "Display", c1: "0x10", c2: "0x3A" },
+                { label: "Rew", c1: "0x10", c2: "0x79" },
+                { label: "Fwd", c1: "0x10", c2: "0x34" },
+                { label: "Prev", c1: "0x10", c2: "0x21" },
+                { label: "Next", c1: "0x10", c2: "0x0B" }
+            ];
+
+            const advancedAudio = [
+                { label: "Stereo", c1: "0x10", c2: "0x6B" },
+                { label: "Dolby Surr.", c1: "0x10", c2: "0x6E" },
+                { label: "DTS Neo 6", c1: "0x10", c2: "0x6F" },
+                { label: "Logic7", c1: "0x10", c2: "0x72" },
+                { label: "Virtual X", c1: "0x10", c2: "0x73" },
+                { label: "Display Off", c1: "0x10", c2: "0x1F" },
+                { label: "Info panel", c1: "0x10", c2: "0x37" },
+                { label: "Sub +0.5", c1: "0x10", c2: "0x69" },
+                { label: "Sub -0.5", c1: "0x10", c2: "0x6C" }
+            ];
+
+            const zone2Actions = [
+                { label: "Zone2 On", c1: "0x17", c2: "0x7B" },
+                { label: "Zone2 Off", c1: "0x17", c2: "0x7C" },
+                { label: "Zone2 Vol+", c1: "0x17", c2: "0x01" },
+                { label: "Zone2 Vol-", c1: "0x17", c2: "0x02" },
+                { label: "Zone2 Mute", c1: "0x17", c2: "0x03" },
+                { label: "Zone2 CD", c1: "0x17", c2: "0x06" }
+            ];
+
+            function setStatus(text, kind) {
+                statusBadge.textContent = text;
+                statusBadge.style.background = kind === "err" ? "#ffeded" : kind === "busy" ? "#fff4df" : "#e8fbf5";
+                statusBadge.style.borderColor = kind === "err" ? "#f4b7b7" : kind === "busy" ? "#f0cd95" : "#9fd5c9";
+                statusBadge.style.color = kind === "err" ? "#8f2323" : kind === "busy" ? "#8c4d06" : "#0f584f";
+            }
+
+            function logLine(message, type) {
+                const line = document.createElement("div");
+                line.className = "line " + (type || "info");
+                const now = new Date();
+                const hh = String(now.getHours()).padStart(2, "0");
+                const mm = String(now.getMinutes()).padStart(2, "0");
+                const ss = String(now.getSeconds()).padStart(2, "0");
+                line.textContent = "[" + hh + ":" + mm + ":" + ss + "] " + message;
+                logEl.prepend(line);
+            }
+
+            function extractZoneFromDirectResponse(text) {
+                if (!text) {
+                    return null;
+                }
+
+                const upper = String(text).toUpperCase();
+                let match = upper.match(/(?:ZN|ZONE)\s*=?\s*0*([12])\b/);
+                if (match) {
+                    return "0" + match[1];
+                }
+
+                match = upper.match(/DATA=([^\r\n]*)/);
+                if (!match) {
+                    return null;
+                }
+
+                const payload = match[1].trim();
+                if (payload.length === 0) {
+                    return null;
+                }
+
+                if (payload === "1" || payload === "01") {
+                    return "01";
+                }
+                if (payload === "2" || payload === "02") {
+                    return "02";
+                }
+
+                const compact = payload.replace(/[^0-9A-F]/g, "");
+                if (compact.startsWith("01")) {
+                    return "01";
+                }
+                if (compact.startsWith("02")) {
+                    return "02";
+                }
+
+                return null;
+            }
+
+            async function sendRc5(c1, c2, label) {
+                const route = "/lexicon_rc5?zone=" + encodeURIComponent(state.zone) + "&command1=" + encodeURIComponent(c1) + "&command2=" + encodeURIComponent(c2);
+                currentRoute.textContent = "Route: " + route;
+                setStatus("TX RC5", "busy");
+                logLine("RC5 " + (label || "") + " c1=" + c1 + " c2=" + c2 + " zone=" + state.zone, "info");
+
+                try {
+                    const res = await fetch(route);
+                    const text = await res.text();
+                    if (!res.ok) {
+                        throw new Error(text || ("HTTP " + res.status));
+                    }
+                    setStatus("OK", "ok");
+                    logLine(text, "ok");
+                } catch (err) {
+                    setStatus("ERREUR", "err");
+                    logLine(err.message || String(err), "err");
+                }
+            }
+
+            async function sendDirect(command, data, label, dataHex) {
+                const useHex = typeof dataHex === "string" && dataHex.length > 0;
+                const route = "/lexicon_cmd?zone=" + encodeURIComponent(state.zone) + "&command=" + encodeURIComponent(command) +
+                    (useHex ? "&datahex=" + encodeURIComponent(dataHex) : "&data=" + encodeURIComponent(data || ""));
+                currentRoute.textContent = "Route: " + route;
+                setStatus("TX CMD", "busy");
+                logLine("CMD " + (label || "") + " cc=" + command + " data=" + (useHex ? ("0x" + dataHex) : (data || "")) + " zone=" + state.zone, "info");
+
+                try {
+                    const res = await fetch(route);
+                    const text = await res.text();
+                    if (!res.ok) {
+                        throw new Error(text || ("HTTP " + res.status));
+                    }
+                    setStatus("OK", "ok");
+                    logLine(text, "ok");
+                    return {
+                        ok: true,
+                        text: text,
+                        route: route,
+                        zone: state.zone,
+                        command: command
+                    };
+                } catch (err) {
+                    setStatus("ERREUR", "err");
+                    const message = err && err.message ? err.message : String(err);
+                    logLine(message, "err");
+                    return {
+                        ok: false,
+                        error: message,
+                        route: route,
+                        zone: state.zone,
+                        command: command
+                    };
+                }
+            }
+
+            function createActionButton(item, className) {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = className + (item.cls ? " " + item.cls : "");
+                btn.textContent = item.label;
+                btn.addEventListener("click", function() {
+                    sendRc5(item.c1, item.c2, item.label);
+                });
+                return btn;
+            }
+
+            function fillGrid(containerId, items, className) {
+                const root = document.getElementById(containerId);
+                items.forEach(function(item) {
+                    if (item.blank) {
+                        const b = document.createElement("div");
+                        b.className = "blank";
+                        root.appendChild(b);
+                        return;
+                    }
+                    root.appendChild(createActionButton(item, className));
+                });
+            }
+
+            function setActiveZone(zone, syncReceiver) {
+                const zoneChanged = state.zone !== zone;
+                state.zone = zone;
+                if (topZone1 && topZone2) {
+                    topZone1.classList.toggle("primary", zone === "01");
+                    topZone2.classList.toggle("primary", zone === "02");
+                }
+                document.querySelectorAll("#zonePicker button").forEach(function(btn) {
+                    btn.classList.toggle("active", btn.getAttribute("data-zone") === zone);
+                });
+                logLine("Zone active: " + state.zone, "info");
+
+                if (syncReceiver && zoneChanged) {
+                    sendDirect("0x20", "", "zone query", "F0").then(function(result) {
+                        if (!result || !result.ok) {
+                            return;
+                        }
+
+                        const detectedZone = extractZoneFromDirectResponse(result.text);
+                        if (!detectedZone) {
+                            logLine("Zone non détectée dans la réponse", "info");
+                            return;
+                        }
+
+                        if (detectedZone !== state.zone) {
+                            logLine("Zone corrigée depuis réponse: " + detectedZone, "info");
+                            setActiveZone(detectedZone, false);
+                            return;
+                        }
+
+                        logLine("Zone confirmée: " + detectedZone, "ok");
+                    });
+                }
+            }
+
+            document.querySelectorAll("#zonePicker button").forEach(function(btn) {
+                btn.addEventListener("click", function() {
+                    setActiveZone(btn.getAttribute("data-zone"), true);
+                });
+            });
+
+            if (topZone1) {
+                topZone1.addEventListener("click", function() {
+                    setActiveZone("01", true);
+                });
+            }
+
+            if (topZone2) {
+                topZone2.addEventListener("click", function() {
+                    setActiveZone("02", true);
+                });
+            }
+
+            document.getElementById("topLexiconPowerOn").addEventListener("click", function() {
+                sendRc5("0x10", "0x7B", "Power On");
+            });
+
+            document.getElementById("topLexiconPowerOff").addEventListener("click", function() {
+                sendRc5("0x10", "0x7C", "Power Off");
+            });
+
+            document.getElementById("topLexiconVolUp").addEventListener("click", function() {
+                sendRc5("0x10", "0x10", "Vol +");
+            });
+
+            document.getElementById("topLexiconVolDown").addEventListener("click", function() {
+                sendRc5("0x10", "0x11", "Vol -");
+            });
+
+            document.getElementById("toAzurPage").addEventListener("click", function() {
+                window.location.href = "/azur.html";
+            });
+
+            document.getElementById("sendManualRc5").addEventListener("click", function() {
+                const c1 = document.getElementById("manualRc5C1").value.trim() || "0x10";
+                const c2 = document.getElementById("manualRc5C2").value.trim() || "0x10";
+                sendRc5(c1, c2, "manual");
+            });
+
+            document.getElementById("sendManualCmd").addEventListener("click", function() {
+                const cmd = document.getElementById("manualCmd").value.trim() || "0x1D";
+                const data = document.getElementById("manualData").value.trim();
+                sendDirect(cmd, data, "manual");
+            });
+
+            fillGrid("quickActions", quickActions, "action");
+            fillGrid("sourceActions", sourceActions, "chip");
+            fillGrid("navPad", navActions, "action");
+            fillGrid("transportActions", transportActions, "chip");
+            fillGrid("advancedAudio", advancedAudio, "ghost-btn");
+            fillGrid("zone2Actions", zone2Actions, "ghost-btn");
+
+            setActiveZone(state.zone);
+            logLine("Interface prête", "ok");
+            setStatus("READY", "ok");
+        })();
+    </script>
+</body>
+</html>
